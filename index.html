@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>定跡管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Shippori+Mincho:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="appbar">
+      <button id="menu-button" class="appbar-button" type="button" aria-label="定跡一覧を開く">☰</button>
+      <div class="appbar-copy">
+        <p class="appbar-label">定跡管理</p>
+        <h1 id="appbar-title">研究画面</h1>
+      </div>
+      <button id="more-button" class="appbar-button" type="button" aria-label="その他">⋯</button>
+    </header>
+
+    <div id="more-menu" class="more-menu hidden" aria-label="その他メニュー">
+      <button id="export-button" type="button">この定跡を書き出し</button>
+      <button id="rename-opening-button" type="button">名前を変更</button>
+      <button id="more-delete-button" class="danger-menu-item" type="button">削除</button>
+    </div>
+
+    <aside id="drawer" class="drawer" aria-label="定跡一覧">
+      <div class="drawer-header">
+        <div>
+          <p class="drawer-label">Openings</p>
+          <h2>定跡一覧</h2>
+        </div>
+        <button id="close-drawer-button" class="appbar-button subtle" type="button" aria-label="閉じる">×</button>
+      </div>
+
+      <div class="drawer-actions">
+        <button id="home-button" class="drawer-secondary" type="button">ホーム</button>
+        <button id="new-opening-button" class="drawer-primary" type="button">定跡を作成</button>
+        <button id="drawer-position-search-button" class="drawer-secondary" type="button">局面を指定して検索</button>
+      </div>
+
+      <div id="opening-list" class="opening-list"></div>
+    </aside>
+
+    <button id="scrim" class="scrim" type="button" aria-label="メニューを閉じる"></button>
+
+    <section id="opening-setup-sheet" class="setup-sheet hidden" aria-label="新しい定跡を作る">
+      <div class="setup-card">
+        <p class="drawer-label">New Opening</p>
+        <h2 class="setup-title">最初に自分の側を選びます</h2>
+        <div class="setup-side-grid">
+          <button id="choose-black-button" class="setup-side-button" type="button">先手で作る</button>
+          <button id="choose-white-button" class="setup-side-button" type="button">後手で作る</button>
+        </div>
+        <label class="search-field">
+          <span>定跡名</span>
+          <input id="opening-name-input" type="text" placeholder="例: 居飛車 基本分岐">
+        </label>
+        <div class="setup-actions">
+          <button id="cancel-opening-button" class="drawer-secondary" type="button">やめる</button>
+          <label class="drawer-secondary file-button">
+            読み込み
+            <input id="import-input" type="file" accept=".joseki,.zip,application/json" multiple webkitdirectory>
+          </label>
+          <button id="save-opening-button" class="drawer-primary" type="button">作成する</button>
+        </div>
+      </div>
+    </section>
+
+    <main class="study-screen">
+      <section id="home-view" class="home-view">
+        <div class="home-actions">
+          <button id="home-new-opening-button" class="drawer-primary" type="button">定跡を作成</button>
+          <button id="home-position-search-button" class="drawer-secondary" type="button">局面を指定して検索</button>
+        </div>
+
+        <h2 class="home-section-title">定跡一覧</h2>
+        <label class="search-field home-search-field">
+          <span>名前で検索</span>
+          <input id="home-search-input" type="search" placeholder="例: 居飛車">
+        </label>
+        <div class="home-export-bar">
+          <button id="home-export-mode-button" class="drawer-secondary" type="button">書き出し選択</button>
+          <button id="home-delete-mode-button" class="drawer-secondary danger-button" type="button">選択して削除</button>
+          <button id="home-export-selected-button" class="drawer-primary hidden" type="button">選択分を書き出し</button>
+          <button id="home-delete-selected-button" class="drawer-secondary danger-button hidden" type="button">選択分を削除</button>
+          <button id="home-export-cancel-button" class="drawer-secondary hidden" type="button">やめる</button>
+        </div>
+        <div id="home-opening-list" class="home-opening-list"></div>
+      </section>
+
+      <section id="position-search-view" class="position-search-view hidden">
+        <div class="position-search-card">
+          <p class="drawer-label">Position Search</p>
+          <div class="board-with-ranks search-board-wrap">
+            <div id="search-file-labels" class="file-labels" aria-hidden="true"></div>
+            <div id="search-board-grid" class="board-grid search-board-grid" aria-label="局面検索盤"></div>
+            <div id="search-rank-labels" class="rank-labels" aria-hidden="true"></div>
+          </div>
+          <div class="search-capture-actions hidden" id="search-capture-actions">
+            <button id="search-to-black-hand-button" class="drawer-secondary" type="button">先手の持ち駒へ</button>
+            <button id="search-to-white-hand-button" class="drawer-secondary" type="button">後手の持ち駒へ</button>
+          </div>
+          <div class="search-hands-panel">
+            <div class="hand-line">
+              <span class="hand-side">先手</span>
+              <span id="search-sente-hand" class="hand-pieces">なし</span>
+            </div>
+            <div class="hand-line">
+              <span class="hand-side">後手</span>
+              <span id="search-gote-hand" class="hand-pieces">なし</span>
+            </div>
+          </div>
+          <div class="search-board-actions">
+            <button id="search-board-back-button" class="drawer-secondary" type="button">ホーム</button>
+            <button id="search-board-reset-button" class="drawer-secondary" type="button">初期局面</button>
+            <button id="search-board-turn-button" class="drawer-secondary" type="button">手番: 先手</button>
+            <button id="search-board-search-button" class="drawer-primary" type="button">この盤面で検索</button>
+          </div>
+          <div class="search-match-options">
+            <button id="search-flipped-button" class="option-pill active" type="button">先後入替も探す</button>
+          </div>
+          <label class="search-field">
+            <span>SFENでも検索</span>
+            <input id="position-search-input" type="text" placeholder="例: lnsgkgsnl/... b - 1">
+          </label>
+          <button id="position-search-button" class="drawer-secondary" type="button">SFENで検索</button>
+          <div id="position-search-results" class="position-search-results"></div>
+        </div>
+      </section>
+
+      <section id="empty-state" class="empty-state hidden">
+        <h2>定跡を作ると盤面がここに出ます</h2>
+        <p>左上のメニューから定跡を追加してください。</p>
+      </section>
+
+      <section id="study-view" class="study-view hidden">
+        <div class="board-stage">
+          <div class="board-header">
+            <span id="turn-chip" class="turn-chip"></span>
+            <span id="opening-chip" class="opening-chip"></span>
+          </div>
+
+          <div class="board-frame">
+            <div class="board-with-ranks">
+              <div id="file-labels" class="file-labels" aria-hidden="true"></div>
+              <div id="board-grid" class="board-grid" aria-label="将棋盤"></div>
+              <div id="rank-labels" class="rank-labels" aria-hidden="true"></div>
+            </div>
+          </div>
+
+          <div class="hands-strip">
+            <div class="hand-line">
+              <span class="hand-side">先手</span>
+              <span id="sente-hand" class="hand-pieces">なし</span>
+            </div>
+            <div class="hand-line">
+              <span class="hand-side">後手</span>
+              <span id="gote-hand" class="hand-pieces">なし</span>
+            </div>
+          </div>
+        </div>
+
+        <section class="choice-stage">
+          <div id="evaluation-panel" class="evaluation-panel hidden">
+            <div>
+              <span class="eval-label">評価値</span>
+              <strong id="eval-score">未設定</strong>
+            </div>
+          </div>
+
+          <div id="choice-head" class="choice-head">
+            <span id="branch-count" class="choice-count"></span>
+            <div id="choice-nav" class="choice-nav">
+              <button id="prev-branch-button" class="nav-button" type="button" aria-label="前の相手の手">‹</button>
+              <button id="next-branch-button" class="nav-button" type="button" aria-label="次の相手の手">›</button>
+            </div>
+          </div>
+
+          <div class="choice-body">
+            <button id="opponent-move-button" class="move-button" type="button"></button>
+
+            <div id="reply-panel" class="reply-panel hidden">
+              <button id="reply-move-button" class="reply-button" type="button"></button>
+            </div>
+
+            <div id="composer-panel" class="composer-panel hidden">
+              <p id="composer-title" class="composer-title"></p>
+              <p id="composer-status" class="composer-status"></p>
+              <button id="edit-add-branch-button" class="drawer-primary composer-add" type="button">次の手を入力</button>
+              <button id="cancel-compose-button" class="drawer-secondary composer-cancel" type="button">入力をやめる</button>
+            </div>
+
+            <div id="no-branch-panel" class="no-branch-panel hidden">
+              <p>この局面にはまだ続きがありません</p>
+              <button id="empty-add-branch-button" class="drawer-primary" type="button">この先を入力</button>
+            </div>
+          </div>
+        </section>
+
+        <footer class="footer-actions">
+          <button id="add-branch-button" class="footer-button add-footer-button" type="button" aria-label="この先を入力">+</button>
+          <button id="back-button" class="footer-button" type="button">1手戻る</button>
+          <button id="reset-button" class="footer-button" type="button">最初に戻る</button>
+          <button id="current-position-search-button" class="footer-button" type="button">局面検索</button>
+          <button id="connect-opening-button" class="footer-button" type="button">他の定跡に接続</button>
+          <button id="delete-branch-button" class="footer-button danger-button" type="button">選択中の手順を削除</button>
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    window.module = { exports: {} };
+    window.exports = window.module.exports;
+  </script>
+  <script src="./json-kifu-format-lib.js"></script>
+  <script>
+    window.JKF = window.module.exports;
+    window.module = undefined;
+    window.exports = undefined;
+  </script>
+  <script src="./app.js"></script>
+</body>
+</html>
