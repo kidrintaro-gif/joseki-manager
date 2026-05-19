@@ -136,6 +136,7 @@ initialize();
 function initialize() {
   ensureSelection();
   bindEvents();
+  preventBoardDoubleTapZoom();
   render();
 }
 
@@ -198,6 +199,25 @@ function on(element, eventName, handler) {
   if (element) {
     element.addEventListener(eventName, handler);
   }
+}
+
+function preventBoardDoubleTapZoom() {
+  let lastTouchEnd = 0;
+  const blockDoubleTap = (event) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 350) {
+      event.preventDefault();
+    }
+    lastTouchEnd = now;
+  };
+
+  [elements.boardGrid, elements.searchBoardGrid].forEach((board) => {
+    if (!board) {
+      return;
+    }
+    board.addEventListener("touchend", blockDoubleTap, { passive: false });
+    board.addEventListener("dblclick", (event) => event.preventDefault());
+  });
 }
 
 function loadOpenings() {
