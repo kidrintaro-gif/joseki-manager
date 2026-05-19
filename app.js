@@ -221,26 +221,19 @@ function preventBoardDoubleTapZoom() {
     if (!board) {
       return;
     }
-    board.addEventListener("touchend", handleManualTap, { passive: false });
     board.addEventListener("dblclick", (event) => event.preventDefault());
-  });
-
-  [elements.senteHand, elements.goteHand, elements.searchSenteHand, elements.searchGoteHand].forEach((hand) => {
-    if (!hand) {
-      return;
-    }
-    hand.addEventListener("touchend", handleManualTap, { passive: false });
   });
 }
 
-function handleManualTap(event) {
-  const target = event.target.closest("button");
-  if (!target || target.disabled) {
-    return;
-  }
-
-  event.preventDefault();
-  target.click();
+function addTapHandler(element, handler) {
+  element.addEventListener("click", handler);
+  element.addEventListener("touchend", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!element.disabled) {
+      handler(event);
+    }
+  }, { passive: false });
 }
 
 function loadOpenings() {
@@ -637,7 +630,7 @@ function renderSearchBoard() {
       square.dataset.x = String(x);
       square.dataset.y = String(y);
       decorateSearchSquare(square, x, y, game);
-      square.addEventListener("click", () => handleSearchBoardClick(x, y));
+      addTapHandler(square, () => handleSearchBoardClick(x, y));
 
       const piece = game.get(x, y);
       if (piece) {
@@ -683,7 +676,7 @@ function renderSearchHandLine(container, game, color) {
       button.classList.add("selected");
     }
     button.textContent = `${window.JKF.Shogi.kindToString(kind, true)}${summary[kind] > 1 ? summary[kind] : ""}`;
-    button.addEventListener("click", () => handleSearchHandClick(kind, color));
+    addTapHandler(button, () => handleSearchHandClick(kind, color));
     container.append(button);
   });
 }
@@ -811,13 +804,13 @@ function renderBoard(sfen, playerSide = "black") {
 
       if (state.composer) {
         decorateComposerSquare(square, x, y, game);
-        square.addEventListener("click", () => handleBoardSquareClick(x, y));
+        addTapHandler(square, () => handleBoardSquareClick(x, y));
       } else if (revealedBranch) {
         decorateReplySquare(square, x, y, game, revealedBranch);
-        square.addEventListener("click", () => handleReplyBoardClick(x, y));
+        addTapHandler(square, () => handleReplyBoardClick(x, y));
       } else if (hasInteractiveBranches()) {
         decorateBrowseSquare(square, x, y, game);
-        square.addEventListener("click", () => handleBrowseBoardClick(x, y));
+        addTapHandler(square, () => handleBrowseBoardClick(x, y));
       } else {
         square.disabled = true;
       }
@@ -883,7 +876,7 @@ function renderHandLine(container, game, color) {
     button.disabled = !selectableKinds.includes(kind);
     if (selectableKinds.includes(kind)) {
       button.classList.add("selectable");
-      button.addEventListener("click", () => handleHandClick(kind, color));
+      addTapHandler(button, () => handleHandClick(kind, color));
     }
     if (isSelectedHandKind(kind, color)) {
       button.classList.add("selected");
