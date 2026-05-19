@@ -221,12 +221,17 @@ function preventBoardDoubleTapZoom() {
     if (!board) {
       return;
     }
+    board.addEventListener("touchend", handleBoardTouchEnd, { passive: false, capture: true });
     board.addEventListener("dblclick", (event) => event.preventDefault());
   });
 }
 
 function addTapHandler(element, handler) {
   element.addEventListener("click", handler);
+}
+
+function addTouchTapHandler(element, handler) {
+  addTapHandler(element, handler);
   element.addEventListener("touchend", (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -234,6 +239,39 @@ function addTapHandler(element, handler) {
       handler(event);
     }
   }, { passive: false });
+}
+
+function handleBoardTouchEnd(event) {
+  const touch = event.changedTouches?.[0];
+  const touchedElement = touch ? document.elementFromPoint(touch.clientX, touch.clientY) : event.target;
+  const square = touchedElement?.closest(".board-square");
+  if (!square) {
+    return;
+  }
+
+  const x = Number(square.dataset.x);
+  const y = Number(square.dataset.y);
+  if (!x || !y) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (event.currentTarget === elements.searchBoardGrid) {
+    handleSearchBoardClick(x, y);
+    return;
+  }
+
+  const node = getActiveNode();
+  const revealedBranch = node ? getRevealedBranch(node) : null;
+  if (state.composer) {
+    handleBoardSquareClick(x, y);
+  } else if (revealedBranch) {
+    handleReplyBoardClick(x, y);
+  } else if (hasInteractiveBranches()) {
+    handleBrowseBoardClick(x, y);
+  }
 }
 
 function loadOpenings() {
@@ -676,7 +714,7 @@ function renderSearchHandLine(container, game, color) {
       button.classList.add("selected");
     }
     button.textContent = `${window.JKF.Shogi.kindToString(kind, true)}${summary[kind] > 1 ? summary[kind] : ""}`;
-    addTapHandler(button, () => handleSearchHandClick(kind, color));
+    addTouchTapHandler(button, () => handleSearchHandClick(kind, color));
     container.append(button);
   });
 }
@@ -876,7 +914,7 @@ function renderHandLine(container, game, color) {
     button.disabled = !selectableKinds.includes(kind);
     if (selectableKinds.includes(kind)) {
       button.classList.add("selectable");
-      addTapHandler(button, () => handleHandClick(kind, color));
+      addTouchTapHandler(button, () => handleHandClick(kind, color));
     }
     if (isSelectedHandKind(kind, color)) {
       button.classList.add("selected");
