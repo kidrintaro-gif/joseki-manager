@@ -202,20 +202,23 @@ function on(element, eventName, handler) {
 }
 
 function preventBoardDoubleTapZoom() {
-  let lastTouchEnd = 0;
-  const blockDoubleTap = (event) => {
+  let lastTouchEndAt = 0;
+  const blockDoubleTapZoom = (event) => {
     const now = Date.now();
-    if (now - lastTouchEnd <= 350) {
+    if (now - lastTouchEndAt <= 350) {
       event.preventDefault();
     }
-    lastTouchEnd = now;
+    lastTouchEndAt = now;
   };
+
+  document.addEventListener("touchend", blockDoubleTapZoom, { passive: false });
+  document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
 
   [elements.boardGrid, elements.searchBoardGrid].forEach((board) => {
     if (!board) {
       return;
     }
-    board.addEventListener("touchend", blockDoubleTap, { passive: false });
+    board.addEventListener("touchend", blockDoubleTapZoom, { passive: false });
     board.addEventListener("dblclick", (event) => event.preventDefault());
   });
 }
