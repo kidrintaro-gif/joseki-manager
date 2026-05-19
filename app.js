@@ -204,6 +204,9 @@ function on(element, eventName, handler) {
 function preventBoardDoubleTapZoom() {
   let lastTouchEndAt = 0;
   const blockDoubleTapZoom = (event) => {
+    if (event.target.closest(".board-grid, .hand-pieces")) {
+      return;
+    }
     const now = Date.now();
     if (now - lastTouchEndAt <= 350) {
       event.preventDefault();
@@ -218,9 +221,26 @@ function preventBoardDoubleTapZoom() {
     if (!board) {
       return;
     }
-    board.addEventListener("touchend", blockDoubleTapZoom, { passive: false });
+    board.addEventListener("touchend", handleManualTap, { passive: false });
     board.addEventListener("dblclick", (event) => event.preventDefault());
   });
+
+  [elements.senteHand, elements.goteHand, elements.searchSenteHand, elements.searchGoteHand].forEach((hand) => {
+    if (!hand) {
+      return;
+    }
+    hand.addEventListener("touchend", handleManualTap, { passive: false });
+  });
+}
+
+function handleManualTap(event) {
+  const target = event.target.closest("button");
+  if (!target || target.disabled) {
+    return;
+  }
+
+  event.preventDefault();
+  target.click();
 }
 
 function loadOpenings() {
