@@ -1089,7 +1089,7 @@ body[data-edit-mode="true"] #connect-opening-button {
 }
 
 body:not([data-edit-mode="true"]) #delete-branch-button,
-body[data-edit-mode="true"] #delete-branch-button {
+body[data-edit-mode="true"]:not([data-revealed-branch="true"]) #delete-branch-button {
   display: none;
 }
 

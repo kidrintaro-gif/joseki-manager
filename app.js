@@ -814,7 +814,7 @@ function renderStudy() {
   elements.resetButton.disabled = state.path.length === 0 || Boolean(state.composer);
   elements.currentPositionSearchButton.disabled = Boolean(state.composer);
   elements.connectOpeningButton.disabled = false;
-  elements.deleteBranchButton.disabled = !getDeletionBranch(node) || Boolean(state.composer);
+  elements.deleteBranchButton.disabled = !getDeletionBranch(node);
 }
 
 function getBoardSfenForStudy(node, previewBranch) {
@@ -1206,9 +1206,9 @@ function renderComposer() {
   elements.replyMoveButton.textContent = branchForDeletion ? getBranchDeleteTargetLabel(branchForDeletion) : "";
   elements.opponentMoveButton.classList.toggle("hidden", !branchForDeletion);
   elements.opponentMoveButton.textContent = branchForDeletion?.note || "メモを入力";
-  elements.branchDeleteButton.classList.toggle("hidden", !branchForDeletion);
-  elements.branchDeleteButton.disabled = !branchForDeletion;
-  elements.branchDeleteButton.textContent = getBranchDeleteButtonLabel(branchForDeletion);
+  elements.branchDeleteButton.classList.add("hidden");
+  elements.branchDeleteButton.disabled = true;
+  elements.branchDeleteButton.textContent = "";
   elements.composerPanel.classList.remove("hidden");
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "入力をやめる";
@@ -1230,9 +1230,13 @@ function renderComposer() {
   }
 
   if (state.composer.stage === "registered-reply") {
-    elements.branchCount.textContent = `${formatSideLabel(playerSide)}の応手`;
-    elements.composerTitle.textContent = "青い応手を盤で動かすと、その先を編集できます";
-    elements.composerStatus.textContent = branchForDeletion ? getBranchDeleteTargetLabel(branchForDeletion) : "";
+    elements.choiceHead.classList.add("hidden");
+    elements.opponentMoveButton.classList.add("hidden");
+    elements.replyPanel.classList.add("hidden");
+    elements.composerPanel.classList.add("hidden");
+    elements.branchCount.textContent = "";
+    elements.composerTitle.textContent = "";
+    elements.composerStatus.textContent = "";
     return;
   }
 
