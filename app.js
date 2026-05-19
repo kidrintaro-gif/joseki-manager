@@ -120,7 +120,7 @@ const elements = {
   replyPanel: document.querySelector("#reply-panel"),
   replyMoveButton: document.querySelector("#reply-move-button"),
   composerPanel: document.querySelector("#composer-panel"),
-  composerTitle: document.querySelector("#composer-title"),
+  composerNote: document.querySelector("#composer-note"),
   composerStatus: document.querySelector("#composer-status"),
   editAddBranchButton: document.querySelector("#edit-add-branch-button"),
   noBranchPanel: document.querySelector("#no-branch-panel"),
@@ -193,12 +193,25 @@ function bindEvents() {
   on(elements.currentPositionSearchButton, "click", searchCurrentPosition);
   on(elements.connectOpeningButton, "click", connectToAnotherOpening);
   on(elements.deleteBranchButton, "click", deleteSelectedBranchQuick);
+  on(elements.composerNote, "input", updateActiveNodeNote);
 }
 
 function on(element, eventName, handler) {
   if (element) {
     element.addEventListener(eventName, handler);
   }
+}
+
+function updateActiveNodeNote(event) {
+  const opening = getSelectedOpening();
+  const node = getActiveNode();
+  if (!opening || !node) {
+    return;
+  }
+
+  node.note = event.target.value;
+  opening.updatedAt = new Date().toISOString();
+  saveOpenings();
 }
 
 function preventBoardDoubleTapZoom() {
@@ -313,6 +326,7 @@ function createSampleOpenings() {
           id: rootId,
           sfen: SAMPLE_ROOT_SFEN,
           eval: null,
+          note: "",
           branches: [
             {
               id: crypto.randomUUID(),
@@ -334,12 +348,14 @@ function createSampleOpenings() {
           id: nextA,
           sfen: "lnsgkgsnl/1r5b1/p1ppppppp/1p7/7P1/9/PPPPPPP1P/1B5R1/LNSGKGSNL w - 4",
           eval: null,
+          note: "",
           branches: []
         },
         [nextB]: {
           id: nextB,
           sfen: "lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/2P4P1/PP1PPPP1P/1B5R1/LNSGKGSNL w - 4",
           eval: null,
+          note: "",
           branches: []
         }
       }
@@ -364,6 +380,7 @@ function normalizeOpening(opening) {
       id: String(node.id),
       sfen: normalizeKnownSfen(typeof node.sfen === "string" && node.sfen.trim() ? node.sfen.trim() : INITIAL_SFEN),
       eval: normalizeEvaluation(node.eval),
+      note: String(node.note || ""),
       branches: Array.isArray(node.branches)
         ? node.branches.map((branch) => ({
             id: String(branch.id || crypto.randomUUID()),
@@ -379,7 +396,7 @@ function normalizeOpening(opening) {
 
   const rootNodeId = String(opening.rootNodeId || Object.keys(nodes)[0] || crypto.randomUUID());
   if (!nodes[rootNodeId]) {
-    nodes[rootNodeId] = { id: rootNodeId, sfen: INITIAL_SFEN, eval: null, branches: [] };
+    nodes[rootNodeId] = { id: rootNodeId, sfen: INITIAL_SFEN, eval: null, note: "", branches: [] };
   }
 
   if (Object.values(nodes).some((node) => hasNifu(node.sfen))) {
@@ -1188,7 +1205,7 @@ function renderEditorMenu() {
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "編集を終わる";
   elements.branchCount.textContent = "編集";
-  elements.composerTitle.textContent = "次の手を準備中";
+  elements.composerNote.value = getActiveNode()?.note || "";
   elements.composerStatus.textContent = "";
 }
 
@@ -1210,21 +1227,18 @@ function renderComposer() {
   elements.branchDeleteButton.disabled = true;
   elements.branchDeleteButton.textContent = "";
   elements.composerPanel.classList.remove("hidden");
+  elements.composerNote.value = node?.note || "";
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "入力をやめる";
 
   if (state.composer.mode === "root-player") {
     elements.branchCount.textContent = `${formatSideLabel(playerSide)}の初手`;
-    elements.composerTitle.textContent = `${formatSideLabel(playerSide)}の初手を盤で選びます`;
     elements.composerStatus.textContent = "";
     return;
   }
 
   if (state.composer.stage === "opponent") {
     elements.branchCount.textContent = `${formatSideLabel(opponentSide)}の手`;
-    elements.composerTitle.textContent = branchForDeletion
-      ? "この手を削除できます。別の相手手を盤で選ぶと削除対象を切り替えられます"
-      : `${formatSideLabel(opponentSide)}の次の手を盤で選びます`;
     elements.composerStatus.textContent = branchForDeletion ? getBranchDeleteTargetLabel(branchForDeletion) : "";
     return;
   }
@@ -1235,13 +1249,11 @@ function renderComposer() {
     elements.replyPanel.classList.add("hidden");
     elements.composerPanel.classList.add("hidden");
     elements.branchCount.textContent = "";
-    elements.composerTitle.textContent = "";
     elements.composerStatus.textContent = "";
     return;
   }
 
   elements.branchCount.textContent = `${formatSideLabel(playerSide)}の手`;
-  elements.composerTitle.textContent = `${formatSideLabel(playerSide)}の次の手を盤で選びます`;
   elements.composerStatus.textContent = state.composer.branch.opponentMove;
 }
 
@@ -1760,6 +1772,7 @@ function saveComposedBranch(nextSfen) {
       id: nextNodeId,
       sfen: nextSfen,
       eval: null,
+      note: "",
       branches: []
     };
   }
@@ -2535,6 +2548,7 @@ function createOpening() {
         id: rootNodeId,
         sfen: INITIAL_SFEN,
         eval: null,
+        note: "",
         branches: []
       }
     }

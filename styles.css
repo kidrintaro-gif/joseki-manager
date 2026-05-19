@@ -1020,19 +1020,25 @@ body[data-more-menu-open="true"] .scrim {
   display: grid;
   align-content: center;
   gap: 10px;
-  text-align: center;
+  text-align: left;
   padding: 12px 6px;
 }
 
-.composer-title,
 .composer-status {
   margin: 0;
 }
 
-.composer-title {
-  font-family: "Shippori Mincho", serif;
-  font-size: 1.02rem;
-  font-weight: 700;
+.composer-note {
+  width: 100%;
+  min-height: 74px;
+  resize: none;
+  padding: 10px 12px;
+  border: 1px solid rgba(126, 49, 16, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 250, 242, 0.92);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
 }
 
 .composer-status {
