@@ -10,19 +10,10 @@
 - 局面を指定して定跡を検索
 - 定跡ごとに `.joseki` ファイルとして書き出し/読み込み
 - 複数定跡をZIPでまとめて書き出し
-- 局面ごとの評価値欄に対応
 
 ## 使い方
 
 `index.html` をブラウザで開くだけで使えます。サーバーやビルドは不要です。
-
-## GitHub Pagesで公開する
-
-1. GitHubで新しいリポジトリを作成します。
-2. `index.html`, `styles.css`, `app.js`, `json-kifu-format-lib.js`, `README.md` をアップロードします。
-3. リポジトリの `Settings` → `Pages` を開きます。
-4. `Deploy from a branch` を選び、`main` / `/root` を指定します。
-5. 表示されたURLからアプリを開けます。
 
 ## データについて
 
