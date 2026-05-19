@@ -1,0 +1,12 @@
+# Temporary/debug files
+.tmp-*
+note_june_drafts.mjs
+
+# Local preview screenshots
+preview*.png
+layout-*.png
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/

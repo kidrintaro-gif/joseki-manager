@@ -8,7 +8,55 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Shippori+Mincho:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./mobile-board.css">
+  <style>
+    .study-screen {
+      padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    }
+
+    .study-view {
+      gap: 6px;
+    }
+
+    .board-stage {
+      gap: 7px;
+    }
+
+    .turn-chip,
+    .opening-chip,
+    .choice-count {
+      padding: 5px 10px;
+      font-size: 0.78rem;
+    }
+
+    .board-grid {
+      width: min(calc(100vw - 54px), clamp(235px, 39svh, 340px));
+    }
+
+    .hands-strip {
+      gap: 3px;
+      min-height: 56px;
+      padding: 6px 7px;
+      border-radius: 13px;
+    }
+
+    .hand-line {
+      gap: 5px;
+      min-height: 23px;
+      font-size: 0.78rem;
+    }
+
+    .hand-piece-button {
+      min-height: 23px;
+      padding: 1px 7px;
+      font-size: 0.74rem;
+    }
+
+    .footer-button {
+      min-height: 44px;
+      padding: 0 7px;
+      font-size: 0.82rem;
+    }
+  </style>
 </head>
 <body>
   <div class="app-shell">
@@ -182,6 +230,7 @@
 
           <div class="choice-body">
             <button id="opponent-move-button" class="move-button" type="button"></button>
+            <button id="branch-delete-button" class="branch-delete-button hidden" type="button"></button>
 
             <div id="reply-panel" class="reply-panel hidden">
               <button id="reply-move-button" class="reply-button" type="button"></button>
@@ -203,11 +252,11 @@
 
         <footer class="footer-actions">
           <button id="add-branch-button" class="footer-button add-footer-button" type="button" aria-label="この先を入力">+</button>
-          <button id="back-button" class="footer-button" type="button">1手戻る</button>
+          <button id="back-button" class="footer-button" type="button">戻る</button>
           <button id="reset-button" class="footer-button" type="button">最初に戻る</button>
           <button id="current-position-search-button" class="footer-button" type="button">局面検索</button>
           <button id="connect-opening-button" class="footer-button" type="button">他の定跡に接続</button>
-          <button id="delete-branch-button" class="footer-button danger-button" type="button">選択中の手順を削除</button>
+          <button id="delete-branch-button" class="footer-button danger-button" type="button">この手を削除</button>
         </footer>
       </section>
     </main>

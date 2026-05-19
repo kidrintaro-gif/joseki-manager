@@ -32,6 +32,7 @@ const state = {
   menuOpen: false,
   moreMenuOpen: false,
   homeExportMode: false,
+  homeSelectionMode: null,
   homeSelectedOpeningIds: new Set(),
   homeSearch: "",
   positionSearchResults: [],
@@ -115,6 +116,7 @@ const elements = {
   prevBranchButton: document.querySelector("#prev-branch-button"),
   nextBranchButton: document.querySelector("#next-branch-button"),
   opponentMoveButton: document.querySelector("#opponent-move-button"),
+  branchDeleteButton: document.querySelector("#branch-delete-button"),
   replyPanel: document.querySelector("#reply-panel"),
   replyMoveButton: document.querySelector("#reply-move-button"),
   composerPanel: document.querySelector("#composer-panel"),
@@ -149,7 +151,7 @@ function bindEvents() {
   on(elements.homeNewOpeningButton, "click", openOpeningSetup);
   on(elements.homePositionSearchButton, "click", openPositionSearch);
   on(elements.homeExportModeButton, "click", openHomeExportMode);
-  on(elements.homeDeleteModeButton, "click", openHomeExportMode);
+  on(elements.homeDeleteModeButton, "click", openHomeDeleteMode);
   on(elements.homeExportSelectedButton, "click", exportSelectedHomeOpenings);
   on(elements.homeDeleteSelectedButton, "click", deleteSelectedHomeOpenings);
   on(elements.homeExportCancelButton, "click", closeHomeExportMode);
@@ -183,6 +185,7 @@ function bindEvents() {
   on(elements.prevBranchButton, "click", () => changeBranch(-1));
   on(elements.nextBranchButton, "click", () => changeBranch(1));
   on(elements.opponentMoveButton, "click", editSelectedBranchNote);
+  on(elements.branchDeleteButton, "click", deleteSelectedBranchQuick);
   on(elements.replyMoveButton, "click", advanceBranch);
   on(elements.backButton, "click", goBack);
   on(elements.resetButton, "click", resetPath);
@@ -488,16 +491,18 @@ function renderHome() {
 
   elements.homeView.classList.toggle("hidden", state.screen !== "home");
   elements.homeOpeningList.innerHTML = "";
+  const selectionMode = state.homeSelectionMode || (state.homeExportMode ? "export" : null);
+  state.homeExportMode = Boolean(selectionMode);
   state.homeSelectedOpeningIds.forEach((id) => {
     if (!state.openings.some((opening) => opening.id === id)) {
       state.homeSelectedOpeningIds.delete(id);
     }
   });
-  elements.homeExportModeButton.classList.toggle("hidden", state.homeExportMode);
-  elements.homeDeleteModeButton.classList.toggle("hidden", state.homeExportMode);
-  elements.homeExportSelectedButton.classList.toggle("hidden", !state.homeExportMode);
-  elements.homeDeleteSelectedButton.classList.toggle("hidden", !state.homeExportMode);
-  elements.homeExportCancelButton.classList.toggle("hidden", !state.homeExportMode);
+  elements.homeExportModeButton.classList.toggle("hidden", Boolean(selectionMode));
+  elements.homeDeleteModeButton.classList.toggle("hidden", Boolean(selectionMode));
+  elements.homeExportSelectedButton.classList.toggle("hidden", selectionMode !== "export");
+  elements.homeDeleteSelectedButton.classList.toggle("hidden", selectionMode !== "delete");
+  elements.homeExportCancelButton.classList.toggle("hidden", !selectionMode);
   elements.homeExportSelectedButton.disabled = state.homeSelectedOpeningIds.size === 0;
   elements.homeDeleteSelectedButton.disabled = state.homeSelectedOpeningIds.size === 0;
 
@@ -512,7 +517,7 @@ function renderHome() {
 
   homeOpenings.forEach((opening) => {
     const card = document.createElement("div");
-    card.className = `home-opening-card${state.homeExportMode ? " export-mode" : ""}`;
+    card.className = `home-opening-card${selectionMode ? " export-mode" : ""}`;
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.className = "home-opening-check";
@@ -536,14 +541,14 @@ function renderHome() {
       <small>${countBranches(opening)} 手順</small>
     `;
     button.addEventListener("click", () => {
-      if (state.homeExportMode) {
+      if (selectionMode) {
         checkbox.checked = !checkbox.checked;
         checkbox.dispatchEvent(new Event("change"));
         return;
       }
       selectOpening(opening.id, false);
     });
-    if (state.homeExportMode) {
+    if (selectionMode) {
       card.append(checkbox);
     }
     card.append(button);
@@ -724,18 +729,25 @@ function renderStudy() {
   elements.studyView.classList.remove("hidden");
 
   const previewBranch = getRevealedBranch(node);
-  const boardSfen = state.composer ? state.composer.boardSfen : getBoardSfenForView(node, previewBranch);
+  const boardSfen = getBoardSfenForStudy(node, previewBranch);
   elements.turnChip.textContent = formatTurn(boardSfen);
   elements.openingChip.textContent = `${formatSideLabel(opening.playerSide)} ・ 合計${getPlayedMoveCount(boardSfen)}手`;
 
   renderBoard(boardSfen, opening.playerSide);
   renderEvaluationPanel(node);
   renderBranchArea(node.branches);
-  elements.backButton.disabled = (state.path.length === 0 && !state.revealedBranchId) || Boolean(state.composer);
+  elements.backButton.disabled = state.path.length === 0 && !state.revealedBranchId && !state.composer;
   elements.resetButton.disabled = state.path.length === 0 || Boolean(state.composer);
   elements.currentPositionSearchButton.disabled = Boolean(state.composer);
   elements.connectOpeningButton.disabled = false;
   elements.deleteBranchButton.disabled = !getDeletionBranch(node) || Boolean(state.composer);
+}
+
+function getBoardSfenForStudy(node, previewBranch) {
+  if (!state.composer) {
+    return getBoardSfenForView(node, previewBranch);
+  }
+  return state.composer.boardSfen;
 }
 
 function renderBoard(sfen, playerSide = "black") {
@@ -914,12 +926,26 @@ function decorateComposerSquare(square, x, y, game) {
     return;
   }
 
+  const node = getActiveNode();
+  const revealedBranch = node ? getRevealedBranch(node) : null;
+  if (composer.stage === "registered-reply" && revealedBranch) {
+    decorateRegisteredReplySquare(square, x, y, game, revealedBranch);
+    return;
+  }
+
   const piece = game.get(x, y);
   const isDropDestination = composer.selected?.drop && composer.legalMoves.some((move) => move.to.x === x && move.to.y === y);
   if (isDropDestination) {
     square.classList.add("destination");
     return;
   }
+
+  const isRegisteredOpponentSource =
+    composer.stage === "opponent" &&
+    !composer.selected &&
+    piece &&
+    piece.color === game.turn &&
+    hasRegisteredOpponentMoveFromSquare(node, game, x, y);
 
   const isSelectable =
     !composer.selected &&
@@ -933,6 +959,8 @@ function decorateComposerSquare(square, x, y, game) {
     square.classList.add("selected");
   } else if (isDestination) {
     square.classList.add("destination");
+  } else if (isRegisteredOpponentSource) {
+    square.classList.add("registered-opponent");
   } else if (isSelectable) {
     square.classList.add("selectable");
   }
@@ -1027,14 +1055,48 @@ function decorateReplySquare(square, x, y, game, branch) {
   square.disabled = true;
 }
 
-function renderBranchArea(branches) {
-  if (state.composer) {
-    renderComposer();
+function decorateRegisteredReplySquare(square, x, y, game, branch) {
+  if (isConnectionBranch(branch)) {
     return;
   }
 
-  if (state.editMode) {
-    renderEditorMenu();
+  const replyMove = findMoveByLabel(game, branch.replyMove);
+  if (!replyMove) {
+    return;
+  }
+
+  const selected = state.composer?.selected;
+  if (replyMove.from && replyMove.from.x === x && replyMove.from.y === y && !selected) {
+    square.classList.add("registered-reply");
+    return;
+  }
+
+  if (replyMove.from && replyMove.from.x === x && replyMove.from.y === y && selected) {
+    square.classList.add("selected");
+    return;
+  }
+
+  if (selected && replyMove.to.x === x && replyMove.to.y === y) {
+    square.classList.add("destination");
+    return;
+  }
+
+  if (!replyMove.from && replyMove.to.x === x && replyMove.to.y === y && !selected) {
+    square.classList.add("registered-reply");
+  }
+}
+
+function applyMoveToGame(game, move) {
+  if (move.from) {
+    game.move(move.from.x, move.from.y, move.to.x, move.to.y, false);
+    return;
+  }
+  game.drop(move.to.x, move.to.y, move.kind);
+}
+
+function renderBranchArea(branches) {
+  if (state.composer) {
+    renderComposer();
     return;
   }
 
@@ -1047,6 +1109,7 @@ function renderEditorMenu() {
   elements.noBranchPanel.classList.add("hidden");
   elements.replyPanel.classList.add("hidden");
   elements.opponentMoveButton.classList.add("hidden");
+  elements.branchDeleteButton.classList.add("hidden");
   elements.composerPanel.classList.remove("hidden");
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "編集を終わる";
@@ -1057,14 +1120,21 @@ function renderEditorMenu() {
 
 function renderComposer() {
   const opening = getSelectedOpening();
+  const node = getActiveNode();
   const playerSide = opening?.playerSide || "black";
   const opponentSide = getOpponentSide(playerSide);
+  const branchForDeletion = getComposerDeletionBranch(node);
 
   elements.choiceHead.classList.remove("hidden");
   elements.choiceNav.classList.add("hidden");
   elements.noBranchPanel.classList.add("hidden");
-  elements.replyPanel.classList.add("hidden");
-  elements.opponentMoveButton.classList.add("hidden");
+  elements.replyPanel.classList.toggle("hidden", !branchForDeletion);
+  elements.replyMoveButton.textContent = branchForDeletion ? getBranchDeleteTargetLabel(branchForDeletion) : "";
+  elements.opponentMoveButton.classList.toggle("hidden", !branchForDeletion);
+  elements.opponentMoveButton.textContent = branchForDeletion?.note || "メモを入力";
+  elements.branchDeleteButton.classList.toggle("hidden", !branchForDeletion);
+  elements.branchDeleteButton.disabled = !branchForDeletion;
+  elements.branchDeleteButton.textContent = getBranchDeleteButtonLabel(branchForDeletion);
   elements.composerPanel.classList.remove("hidden");
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "入力をやめる";
@@ -1078,8 +1148,17 @@ function renderComposer() {
 
   if (state.composer.stage === "opponent") {
     elements.branchCount.textContent = `${formatSideLabel(opponentSide)}の手`;
-    elements.composerTitle.textContent = `${formatSideLabel(opponentSide)}の次の手を盤で選びます`;
-    elements.composerStatus.textContent = "";
+    elements.composerTitle.textContent = branchForDeletion
+      ? "この手を削除できます。別の相手手を盤で選ぶと削除対象を切り替えられます"
+      : `${formatSideLabel(opponentSide)}の次の手を盤で選びます`;
+    elements.composerStatus.textContent = branchForDeletion ? getBranchDeleteTargetLabel(branchForDeletion) : "";
+    return;
+  }
+
+  if (state.composer.stage === "registered-reply") {
+    elements.branchCount.textContent = `${formatSideLabel(playerSide)}の応手`;
+    elements.composerTitle.textContent = "青い応手を盤で動かすと、その先を編集できます";
+    elements.composerStatus.textContent = branchForDeletion ? getBranchDeleteTargetLabel(branchForDeletion) : "";
     return;
   }
 
@@ -1102,12 +1181,15 @@ function renderBranchBrowser(branches) {
   elements.cancelComposeButton.textContent = "入力をやめる";
   elements.noBranchPanel.classList.toggle("hidden", hasBranches);
   elements.opponentMoveButton.classList.toggle("hidden", !selectedBranch);
+  elements.branchDeleteButton.classList.toggle("hidden", !state.editMode || !selectedBranch);
+  elements.branchDeleteButton.disabled = !state.editMode || !selectedBranch;
   elements.prevBranchButton.disabled = !hasBranches;
   elements.nextBranchButton.disabled = !hasBranches;
   elements.replyPanel.classList.add("hidden");
 
   if (!hasBranches) {
     elements.branchCount.textContent = "";
+    elements.branchDeleteButton.textContent = "";
     return;
   }
 
@@ -1119,6 +1201,7 @@ function renderBranchBrowser(branches) {
 
   elements.branchCount.textContent = "";
   elements.opponentMoveButton.textContent = selectedBranch ? selectedBranch.note || "メモを入力" : "";
+  elements.branchDeleteButton.textContent = selectedBranch ? getBranchDeleteButtonLabel(selectedBranch) : "";
   if (branch && isConnectionBranch(branch)) {
     const connectionIndex = node.branches.findIndex((item) => item.id === branch.id);
     if (connectionIndex >= 0) {
@@ -1150,6 +1233,53 @@ function getVisibleBranch(node) {
 function getConnectionButtonLabel(branch) {
   const target = getBranchTarget(getSelectedOpening(), branch);
   return target ? `${target.opening.name}へ接続` : "接続先が見つかりません";
+}
+
+function getBranchDeleteButtonLabel(branch) {
+  if (!branch) {
+    return "";
+  }
+  if (isConnectionBranch(branch)) {
+    return "この接続を削除";
+  }
+  return branch.opponentMove ? `この手を削除: ${branch.opponentMove}` : "この手を削除";
+}
+
+function getBranchDeleteTargetLabel(branch) {
+  if (!branch) {
+    return "";
+  }
+  if (isConnectionBranch(branch)) {
+    return getConnectionButtonLabel(branch);
+  }
+  return [branch.opponentMove, branch.replyMove].filter(Boolean).join(" → ");
+}
+
+function getComposerDeletionBranch(node) {
+  if (!node || !state.editMode || !state.revealedBranchId) {
+    return null;
+  }
+  return getRevealedBranch(node);
+}
+
+function findExistingBranchByOpponentMove(node, moveLabel) {
+  if (!node || !moveLabel) {
+    return null;
+  }
+
+  return node.branches.find((branch) =>
+    !isConnectionBranch(branch) && branch.opponentMove === moveLabel
+  ) || null;
+}
+
+function hasRegisteredOpponentMoveFromSquare(node, game, x, y) {
+  if (!node) {
+    return false;
+  }
+
+  return getBranchMoves(game, node.branches).some((move) =>
+    move.from && move.from.x === x && move.from.y === y
+  );
 }
 
 function startBranchComposer() {
@@ -1241,6 +1371,11 @@ function handleBoardSquareClick(x, y) {
 
   const game = createGameFromSfen(composer.boardSfen);
   const turn = game.turn;
+
+  if (composer.stage === "registered-reply") {
+    handleRegisteredReplyClick(game, x, y);
+    return;
+  }
 
   if (composer.selected) {
     const chosenMove = composer.legalMoves.find((move) => move.to.x === x && move.to.y === y);
@@ -1438,6 +1573,20 @@ function applyComposerMove(game, move) {
   }
 
   if (composer.stage === "opponent") {
+    const existingBranch = findExistingBranchByOpponentMove(getActiveNode(), moveLabel);
+    if (existingBranch) {
+      state.revealedBranchId = existingBranch.id;
+      composer.stage = "registered-reply";
+      composer.boardSfen = game.toSFENString(1);
+      composer.branch.opponentMove = "";
+      composer.branch.replyMove = "";
+      composer.selected = null;
+      composer.legalMoves = [];
+      render();
+      return;
+    }
+
+    state.revealedBranchId = null;
     composer.branch.opponentMove = moveLabel;
     composer.stage = "reply";
     composer.boardSfen = game.toSFENString(1);
@@ -1451,6 +1600,48 @@ function applyComposerMove(game, move) {
   saveComposedBranch(game.toSFENString(1));
 }
 
+function handleRegisteredReplyClick(game, x, y) {
+  const node = getActiveNode();
+  const branch = node ? getRevealedBranch(node) : null;
+  const composer = state.composer;
+  if (!branch || !composer || isConnectionBranch(branch)) {
+    return;
+  }
+
+  const move = findMoveByLabel(game, branch.replyMove);
+  if (!move) {
+    composer.selected = null;
+    composer.legalMoves = [];
+    render();
+    return;
+  }
+
+  if (!move.from) {
+    if (move.to.x === x && move.to.y === y) {
+      advanceExistingBranchForEdit(branch);
+      return;
+    }
+    render();
+    return;
+  }
+
+  if (composer.selected && move.to.x === x && move.to.y === y) {
+    advanceExistingBranchForEdit(branch);
+    return;
+  }
+
+  if (move.from.x === x && move.from.y === y) {
+    composer.selected = { x, y };
+    composer.legalMoves = [move];
+    render();
+    return;
+  }
+
+  composer.selected = null;
+  composer.legalMoves = [];
+  render();
+}
+
 function saveComposedBranch(nextSfen) {
   const opening = getSelectedOpening();
   const node = getActiveNode();
@@ -1460,6 +1651,22 @@ function saveComposedBranch(nextSfen) {
   }
   if (hasNifu(nextSfen)) {
     window.alert("二歩になる局面は保存できません。");
+    return;
+  }
+
+  const duplicateBranchIndex = node.branches.findIndex((branch) =>
+    !isConnectionBranch(branch) && branch.opponentMove === composer.branch.opponentMove
+  );
+  if (duplicateBranchIndex >= 0) {
+    const duplicateBranch = node.branches[duplicateBranchIndex];
+    window.alert(`相手の手「${composer.branch.opponentMove}」には、すでに応手が登録されています。\n変更したい場合は、その手を削除してから入力し直してください。`);
+    state.selectedBranchIndex = duplicateBranchIndex;
+    state.revealedBranchId = duplicateBranch.id;
+    state.browseSelection = null;
+    state.replySelection = null;
+    state.composer = null;
+    state.editMode = true;
+    render();
     return;
   }
 
@@ -1620,11 +1827,21 @@ function openHome() {
 
 function openHomeExportMode() {
   state.homeExportMode = true;
+  state.homeSelectionMode = "export";
+  state.homeSelectedOpeningIds.clear();
+  renderHome();
+}
+
+function openHomeDeleteMode() {
+  state.homeExportMode = true;
+  state.homeSelectionMode = "delete";
+  state.homeSelectedOpeningIds.clear();
   renderHome();
 }
 
 function closeHomeExportMode() {
   state.homeExportMode = false;
+  state.homeSelectionMode = null;
   state.homeSelectedOpeningIds.clear();
   renderHome();
 }
@@ -1649,6 +1866,7 @@ function deleteSelectedHomeOpenings() {
   }
   state.homeSelectedOpeningIds.clear();
   state.homeExportMode = false;
+  state.homeSelectionMode = null;
   ensureSelection();
   saveOpenings();
   render();
@@ -2009,6 +2227,12 @@ function connectToAnotherOpening() {
 function advanceBranch() {
   const node = getActiveNode();
   const opening = getSelectedOpening();
+  if (state.composer?.stage === "registered-reply") {
+    const branch = node ? getRevealedBranch(node) : null;
+    advanceExistingBranchForEdit(branch);
+    return;
+  }
+
   if (!node || !node.branches.length || state.composer) {
     return;
   }
@@ -2031,6 +2255,35 @@ function advanceBranch() {
   state.browseSelection = null;
   state.replySelection = null;
   render();
+}
+
+function advanceExistingBranchForEdit(branch) {
+  const node = getActiveNode();
+  const opening = getSelectedOpening();
+  if (!node || !opening || !branch) {
+    return;
+  }
+
+  const branchIndex = node.branches.findIndex((item) => item.id === branch.id);
+  const target = getBranchTarget(opening, branch);
+  if (branchIndex < 0 || !target) {
+    return;
+  }
+
+  state.path.push({
+    openingId: state.selectedOpeningId,
+    nodeId: state.activeNodeId,
+    branchIndex
+  });
+  state.selectedOpeningId = target.opening.id;
+  state.activeNodeId = target.node.id;
+  state.selectedBranchIndex = 0;
+  state.revealedBranchId = null;
+  state.browseSelection = null;
+  state.replySelection = null;
+  state.composer = null;
+  state.editMode = true;
+  startBranchComposer();
 }
 
 function moveToRevealedBranchNext() {
@@ -2061,8 +2314,58 @@ function moveToRevealedBranchNext() {
   return true;
 }
 
+function resetComposerToCurrentOpponent() {
+  const composer = state.composer;
+  if (!composer) {
+    return;
+  }
+
+  composer.stage = "opponent";
+  composer.boardSfen = getActiveNode()?.sfen || composer.boardSfen;
+  composer.branch.opponentMove = "";
+  composer.branch.replyMove = "";
+  composer.selected = null;
+  composer.legalMoves = [];
+  state.revealedBranchId = null;
+  state.browseSelection = null;
+  state.replySelection = null;
+  render();
+}
+
 function goBack() {
   if (state.composer) {
+    if (state.composer.mode === "root-player") {
+      state.composer.selected = null;
+      state.composer.legalMoves = [];
+      render();
+      return;
+    }
+
+    if (state.composer.stage === "reply") {
+      resetComposerToCurrentOpponent();
+      return;
+    }
+
+    if (state.composer.stage === "registered-reply") {
+      resetComposerToCurrentOpponent();
+      return;
+    }
+
+    const previous = state.path.pop();
+    if (previous) {
+      state.selectedOpeningId = previous.openingId || state.selectedOpeningId;
+      state.activeNodeId = previous.nodeId;
+      state.selectedBranchIndex = previous.branchIndex;
+      state.revealedBranchId = null;
+      state.browseSelection = null;
+      state.replySelection = null;
+      state.composer = null;
+      state.editMode = true;
+      startBranchComposer();
+      return;
+    }
+
+    resetComposerToCurrentOpponent();
     return;
   }
 
@@ -2256,15 +2559,19 @@ function deleteSelectedBranchQuick() {
   const opening = getSelectedOpening();
   const node = getActiveNode();
   const branch = getDeletionBranch(node);
-  if (!opening || !node || !branch || state.composer) {
+  if (!opening || !node || !branch) {
     return;
   }
   deleteCurrentBranch(opening, node, branch);
 }
 
 function deleteCurrentBranch(opening, node, branch) {
-  const label = isConnectionBranch(branch) ? "この接続" : "選択中の手順";
-  if (!window.confirm(`${label}を削除しますか？`)) {
+  const label = isConnectionBranch(branch)
+    ? "この接続"
+    : branch.opponentMove
+      ? `相手の手「${branch.opponentMove}」から始まる手順`
+      : "この手順";
+  if (!window.confirm(`${label}を削除しますか？\nこの操作は元に戻せません。`)) {
     return;
   }
 
