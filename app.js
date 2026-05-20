@@ -423,6 +423,8 @@ function normalizeOpening(opening) {
             id: String(branch.id || crypto.randomUUID()),
             opponentMove: String(branch.opponentMove || "").trim(),
             replyMove: String(branch.replyMove || "").trim(),
+            opponentMoveFrom: normalizeMoveSource(branch.opponentMoveFrom),
+            replyMoveFrom: normalizeMoveSource(branch.replyMoveFrom),
             note: String(branch.note || ""),
             nextOpeningId: String(branch.nextOpeningId || opening.id || ""),
             nextNodeId: String(branch.nextNodeId || "")
@@ -991,7 +993,7 @@ function getSelectableHandKinds(game, color) {
   const node = getActiveNode();
   const revealedBranch = node ? getRevealedBranch(node) : null;
   if (revealedBranch) {
-    const move = findMoveByLabel(game, revealedBranch.replyMove);
+    const move = findBranchMove(game, revealedBranch, "reply");
     return move && !move.from ? [move.kind] : [];
   }
 
@@ -1094,7 +1096,7 @@ function getBoardSfenForView(node, branch) {
 
   try {
     const game = createGameFromSfen(node.sfen);
-    const move = findMoveByLabel(game, branch.opponentMove);
+    const move = findBranchMove(game, branch, "opponent");
     if (!move) {
       return node.sfen;
     }
@@ -1208,7 +1210,7 @@ function decorateReplySquare(square, x, y, game, branch) {
     return;
   }
 
-  const move = findMoveByLabel(game, branch.replyMove);
+  const move = findBranchMove(game, branch, "reply");
   if (!move) {
     square.disabled = true;
     return;
@@ -1250,7 +1252,7 @@ function decorateRegisteredReplySquare(square, x, y, game, branch) {
     return;
   }
 
-  const replyMove = findMoveByLabel(game, branch.replyMove);
+  const replyMove = findBranchMove(game, branch, "reply");
   if (!replyMove) {
     return;
   }
@@ -1282,6 +1284,39 @@ function applyMoveToGame(game, move) {
     return;
   }
   game.drop(move.to.x, move.to.y, move.kind);
+}
+
+function serializeMoveSource(move) {
+  if (!move?.from) {
+    return null;
+  }
+  return { x: move.from.x, y: move.from.y };
+}
+
+function normalizeMoveSource(source) {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+  const x = Number(source.x);
+  const y = Number(source.y);
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 1 || x > 9 || y < 1 || y > 9) {
+    return null;
+  }
+  return { x, y };
+}
+
+function isSameMoveSource(left, right) {
+  const normalizedLeft = normalizeMoveSource(left);
+  const normalizedRight = normalizeMoveSource(right);
+  if (!normalizedLeft && !normalizedRight) {
+    return true;
+  }
+  return Boolean(
+    normalizedLeft &&
+    normalizedRight &&
+    normalizedLeft.x === normalizedRight.x &&
+    normalizedLeft.y === normalizedRight.y
+  );
 }
 
 function renderBranchArea(branches) {
@@ -1460,8 +1495,11 @@ function findExistingBranchByOpponentMove(node, moveLabel) {
     return null;
   }
 
+  const source = state.composer ? normalizeMoveSource(state.composer.branch.opponentMoveFrom) : null;
   return node.branches.find((branch) =>
-    !isConnectionBranch(branch) && branch.opponentMove === moveLabel
+    !isConnectionBranch(branch) &&
+    branch.opponentMove === moveLabel &&
+    isSameMoveSource(branch.opponentMoveFrom, source)
   ) || null;
 }
 
@@ -1492,6 +1530,8 @@ function startBranchComposer() {
       branch: {
         opponentMove: "",
         replyMove: "",
+        opponentMoveFrom: null,
+        replyMoveFrom: null,
         note: ""
       },
       selected: null,
@@ -1508,6 +1548,8 @@ function startBranchComposer() {
     branch: {
       opponentMove: "",
       replyMove: "",
+      opponentMoveFrom: null,
+      replyMoveFrom: null,
       note: ""
     },
     selected: null,
@@ -1670,7 +1712,7 @@ function handleHandClick(kind, color) {
   }
 
   if (revealedBranch) {
-    const move = findMoveByLabel(game, revealedBranch.replyMove);
+    const move = findBranchMove(game, revealedBranch, "reply");
     if (!move || move.from || move.kind !== kind) {
       state.replySelection = null;
       render();
@@ -1709,7 +1751,7 @@ function handleReplyBoardClick(x, y) {
   }
 
   const game = createGameFromSfen(getBoardSfenForView(node, branch));
-  const move = findMoveByLabel(game, branch.replyMove);
+  const move = findBranchMove(game, branch, "reply");
   if (!move) {
     state.replySelection = null;
     render();
@@ -1775,6 +1817,8 @@ function applyComposerMove(game, move) {
       composer.boardSfen = game.toSFENString(1);
       composer.branch.opponentMove = "";
       composer.branch.replyMove = "";
+      composer.branch.opponentMoveFrom = null;
+      composer.branch.replyMoveFrom = null;
       composer.branch.note = "";
       composer.selected = null;
       composer.legalMoves = [];
@@ -1784,6 +1828,7 @@ function applyComposerMove(game, move) {
 
     state.revealedBranchId = null;
     composer.branch.opponentMove = moveLabel;
+    composer.branch.opponentMoveFrom = serializeMoveSource(move);
     composer.stage = "reply";
     composer.boardSfen = game.toSFENString(1);
     composer.selected = null;
@@ -1793,6 +1838,7 @@ function applyComposerMove(game, move) {
   }
 
   composer.branch.replyMove = moveLabel;
+  composer.branch.replyMoveFrom = serializeMoveSource(move);
   saveComposedBranch(game.toSFENString(1));
 }
 
@@ -1804,7 +1850,7 @@ function handleRegisteredReplyClick(game, x, y) {
     return;
   }
 
-  const move = findMoveByLabel(game, branch.replyMove);
+  const move = findBranchMove(game, branch, "reply");
   if (!move) {
     composer.selected = null;
     composer.legalMoves = [];
@@ -1851,7 +1897,9 @@ function saveComposedBranch(nextSfen) {
   }
 
   const duplicateBranchIndex = node.branches.findIndex((branch) =>
-    !isConnectionBranch(branch) && branch.opponentMove === composer.branch.opponentMove
+    !isConnectionBranch(branch) &&
+    branch.opponentMove === composer.branch.opponentMove &&
+    isSameMoveSource(branch.opponentMoveFrom, composer.branch.opponentMoveFrom)
   );
   if (duplicateBranchIndex >= 0) {
     const duplicateBranch = node.branches[duplicateBranchIndex];
@@ -1888,6 +1936,8 @@ function saveComposedBranch(nextSfen) {
     id: crypto.randomUUID(),
     opponentMove: composer.branch.opponentMove,
     replyMove: composer.branch.replyMove,
+    opponentMoveFrom: composer.branch.opponentMoveFrom || null,
+    replyMoveFrom: composer.branch.replyMoveFrom || null,
     note: composer.branch.note || "",
     nextOpeningId,
     nextNodeId
@@ -2500,6 +2550,8 @@ function resetComposerToCurrentOpponent() {
   composer.boardSfen = getActiveNode()?.sfen || composer.boardSfen;
   composer.branch.opponentMove = "";
   composer.branch.replyMove = "";
+  composer.branch.opponentMoveFrom = null;
+  composer.branch.replyMoveFrom = null;
   composer.branch.note = "";
   composer.selected = null;
   composer.legalMoves = [];
@@ -3348,7 +3400,7 @@ function getBranchMoves(game, branches) {
   const matches = [];
 
   for (const [branchIndex, branch] of branches.entries()) {
-    const move = findMoveByLabel(game, branch.opponentMove);
+    const move = findBranchMove(game, branch, "opponent");
     if (!move) {
       continue;
     }
@@ -3365,7 +3417,13 @@ function getBranchMoves(game, branches) {
   return matches;
 }
 
-function findMoveByLabel(game, label) {
+function findBranchMove(game, branch, phase) {
+  const label = phase === "reply" ? branch?.replyMove : branch?.opponentMove;
+  const source = phase === "reply" ? branch?.replyMoveFrom : branch?.opponentMoveFrom;
+  return findMoveByLabel(game, label, source);
+}
+
+function findMoveByLabel(game, label, preferredFrom = null) {
   const parsed = parseMoveLabel(label);
   if (!parsed) {
     return null;
@@ -3379,8 +3437,12 @@ function findMoveByLabel(game, label) {
     ) || null;
   }
 
-  for (let x = 1; x <= 9; x += 1) {
-    for (let y = 1; y <= 9; y += 1) {
+  const source = normalizeMoveSource(preferredFrom);
+  const sources = source
+    ? [source, ...getAllBoardSources().filter((item) => item.x !== source.x || item.y !== source.y)]
+    : getAllBoardSources();
+
+  for (const { x, y } of sources) {
       const piece = game.get(x, y);
       if (!piece || piece.color !== game.turn) {
         continue;
@@ -3391,16 +3453,33 @@ function findMoveByLabel(game, label) {
           continue;
         }
 
-        const labelFromMove = formatMoveLabel(piece.color, move.to, piece.kind, false, { promote: Boolean(move.promote) });
-        const legacyLabel = formatMoveLabel(piece.color, move.to, move.promote ? promoteKind(piece.kind) : piece.kind);
-        if (labelFromMove === label || legacyLabel === label) {
+        if (isParsedMoveMatch(piece, move, parsed)) {
           return move;
         }
       }
-    }
   }
 
   return null;
+}
+
+function isParsedMoveMatch(piece, move, parsed) {
+  if (piece.kind === parsed.kind) {
+    return Boolean(move.promote) === Boolean(parsed.promote);
+  }
+  if (move.promote && promoteKind(piece.kind) === parsed.kind) {
+    return true;
+  }
+  return false;
+}
+
+function getAllBoardSources() {
+  const sources = [];
+  for (let x = 1; x <= 9; x += 1) {
+    for (let y = 1; y <= 9; y += 1) {
+      sources.push({ x, y });
+    }
+  }
+  return sources;
 }
 
 function parseMoveLabel(label) {
