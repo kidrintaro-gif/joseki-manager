@@ -859,7 +859,9 @@ function renderStudy() {
   const previewBranch = getRevealedBranch(node);
   const boardSfen = getBoardSfenForStudy(node, previewBranch);
   elements.turnChip.textContent = formatTurn(boardSfen);
-  elements.openingChip.textContent = `${formatSideLabel(opening.playerSide)} ・ 合計${getPlayedMoveCount(boardSfen)}手`;
+  elements.openingChip.textContent = state.editMode
+    ? `${formatSideLabel(opening.playerSide)} ・ 合計${getPlayedMoveCount(boardSfen)}手`
+    : formatSideLabel(opening.playerSide);
 
   renderBoard(boardSfen, opening.playerSide);
   renderEvaluationPanel(node);
@@ -1004,6 +1006,70 @@ function uniqueKinds(moves) {
   return [...new Set(moves.map((move) => move.kind).filter(Boolean))];
 }
 
+function getLegalMovesFrom(game, x, y) {
+  return game.getMovesFrom(x, y).flatMap((move) => expandPromotionMove(game, move));
+}
+
+function expandPromotionMove(game, move) {
+  if (!move.from) {
+    return [move];
+  }
+
+  const piece = game.get(move.from.x, move.from.y);
+  if (!piece || !canPiecePromote(piece.kind) || !isInPromotionArea(piece.color, move.from.y, move.to.y)) {
+    return [{ ...move, promote: false }];
+  }
+
+  if (mustPromote(piece.kind, piece.color, move.to.y)) {
+    return [{ ...move, promote: true }];
+  }
+
+  return [
+    { ...move, promote: false },
+    { ...move, promote: true }
+  ];
+}
+
+function choosePromotionMove(candidates) {
+  if (!candidates.length) {
+    return null;
+  }
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  const promoteMove = candidates.find((move) => move.promote);
+  const plainMove = candidates.find((move) => !move.promote);
+  if (promoteMove && plainMove) {
+    return window.confirm("成りますか？") ? promoteMove : plainMove;
+  }
+  return candidates[0];
+}
+
+function canPiecePromote(kind) {
+  return Boolean(window.JKF.Shogi.Piece?.canPromote(kind));
+}
+
+function promoteKind(kind) {
+  return window.JKF.Shogi.Piece?.promote(kind) || kind;
+}
+
+function isInPromotionArea(color, fromY, toY) {
+  return color === COLOR.Black
+    ? fromY <= 3 || toY <= 3
+    : fromY >= 7 || toY >= 7;
+}
+
+function mustPromote(kind, color, toY) {
+  if (kind === "FU" || kind === "KY") {
+    return color === COLOR.Black ? toY === 1 : toY === 9;
+  }
+  if (kind === "KE") {
+    return color === COLOR.Black ? toY <= 2 : toY >= 8;
+  }
+  return false;
+}
+
 function isSelectedHandKind(kind, color) {
   return (state.composer?.selected?.drop && state.composer.selected.kind === kind && state.composer.selected.color === color)
     || (state.browseSelection?.drop && state.browseSelection.kind === kind && state.browseSelection.color === color)
@@ -1032,11 +1098,7 @@ function getBoardSfenForView(node, branch) {
     if (!move) {
       return node.sfen;
     }
-    if (move.from) {
-      game.move(move.from.x, move.from.y, move.to.x, move.to.y, false);
-    } else {
-      game.drop(move.to.x, move.to.y, move.kind);
-    }
+    applyMoveToGame(game, move);
     return game.toSFENString(1);
   } catch {
     return node.sfen;
@@ -1079,7 +1141,7 @@ function decorateComposerSquare(square, x, y, game) {
     !composer.selected &&
     piece &&
     piece.color === game.turn &&
-    game.getMovesFrom(x, y).length > 0;
+    getLegalMovesFrom(game, x, y).length > 0;
   const isSelected = composer.selected && composer.selected.x === x && composer.selected.y === y;
   const isDestination = composer.legalMoves.some((move) => move.to.x === x && move.to.y === y);
 
@@ -1216,7 +1278,7 @@ function decorateRegisteredReplySquare(square, x, y, game, branch) {
 
 function applyMoveToGame(game, move) {
   if (move.from) {
-    game.move(move.from.x, move.from.y, move.to.x, move.to.y, false);
+    game.move(move.from.x, move.from.y, move.to.x, move.to.y, Boolean(move.promote));
     return;
   }
   game.drop(move.to.x, move.to.y, move.kind);
@@ -1309,7 +1371,7 @@ function renderBranchBrowser(branches) {
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "入力をやめる";
   elements.noBranchPanel.classList.toggle("hidden", hasBranches);
-  elements.opponentMoveButton.classList.toggle("hidden", !selectedBranch);
+  elements.opponentMoveButton.classList.toggle("hidden", !state.editMode || !selectedBranch);
   elements.branchDeleteButton.classList.toggle("hidden", !state.editMode || !selectedBranch);
   elements.branchDeleteButton.disabled = !state.editMode || !selectedBranch;
   elements.prevBranchButton.disabled = !hasBranches;
@@ -1331,7 +1393,7 @@ function renderBranchBrowser(branches) {
   elements.branchCount.textContent = "";
   syncComposerNote(selectedBranch?.note || "", !selectedBranch);
   elements.composerStatus.textContent = "";
-  elements.opponentMoveButton.textContent = selectedBranch ? getBranchDeleteTargetLabel(selectedBranch) : "";
+  elements.opponentMoveButton.textContent = state.editMode && selectedBranch ? getBranchDeleteTargetLabel(selectedBranch) : "";
   elements.branchDeleteButton.textContent = selectedBranch ? getBranchDeleteButtonLabel(selectedBranch) : "";
   if (branch && isConnectionBranch(branch)) {
     const connectionIndex = node.branches.findIndex((item) => item.id === branch.id);
@@ -1511,7 +1573,8 @@ function handleBoardSquareClick(x, y) {
   }
 
   if (composer.selected) {
-    const chosenMove = composer.legalMoves.find((move) => move.to.x === x && move.to.y === y);
+    const candidates = composer.legalMoves.filter((move) => move.to.x === x && move.to.y === y);
+    const chosenMove = choosePromotionMove(candidates);
     if (chosenMove) {
       applyComposerMove(game, chosenMove);
       return;
@@ -1526,7 +1589,7 @@ function handleBoardSquareClick(x, y) {
     return;
   }
 
-  const legalMoves = game.getMovesFrom(x, y);
+  const legalMoves = getLegalMovesFrom(game, x, y);
   if (!legalMoves.length) {
     composer.selected = null;
     composer.legalMoves = [];
@@ -1691,9 +1754,8 @@ function applyComposerMove(game, move) {
   if (move.from) {
     const before = game.get(move.from.x, move.from.y);
     const moverColor = before.color;
-    game.move(move.from.x, move.from.y, move.to.x, move.to.y, false);
-    const after = game.get(move.to.x, move.to.y);
-    moveLabel = formatMoveLabel(moverColor, move.to, after.kind);
+    game.move(move.from.x, move.from.y, move.to.x, move.to.y, Boolean(move.promote));
+    moveLabel = formatMoveLabel(moverColor, move.to, before.kind, false, { promote: Boolean(move.promote) });
   } else {
     const moverColor = game.turn;
     game.drop(move.to.x, move.to.y, move.kind);
@@ -3324,13 +3386,14 @@ function findMoveByLabel(game, label) {
         continue;
       }
 
-      for (const move of game.getMovesFrom(x, y)) {
+      for (const move of getLegalMovesFrom(game, x, y)) {
         if (move.to.x !== parsed.to.x || move.to.y !== parsed.to.y) {
           continue;
         }
 
-        const labelFromMove = formatMoveLabel(piece.color, move.to, piece.kind);
-        if (labelFromMove === label) {
+        const labelFromMove = formatMoveLabel(piece.color, move.to, piece.kind, false, { promote: Boolean(move.promote) });
+        const legacyLabel = formatMoveLabel(piece.color, move.to, move.promote ? promoteKind(piece.kind) : piece.kind);
+        if (labelFromMove === label || legacyLabel === label) {
           return move;
         }
       }
@@ -3342,18 +3405,30 @@ function findMoveByLabel(game, label) {
 
 function parseMoveLabel(label) {
   const text = String(label || "").trim();
-  const match = text.match(/^[▲△](\d)([一二三四五六七八九])(歩|香|桂|銀|金|角|飛|玉|と|杏|圭|全|馬|龍)(打)?$/);
-  if (!match) {
+  if (text.length < 4) {
+    return null;
+  }
+
+  const dropSuffix = "\u6253";
+  const promoteSuffix = "\u6210";
+  const drop = text.endsWith(dropSuffix);
+  const promote = text.endsWith(promoteSuffix);
+  const body = text.slice(1, text.length - (drop || promote ? 1 : 0));
+  const file = Number(body[0]);
+  const rank = KANJI_RANKS.indexOf(body[1]);
+  const kind = stringToKind(body.slice(2));
+  if (!file || rank < 1 || !kind) {
     return null;
   }
 
   return {
     to: {
-      x: Number(match[1]),
-      y: KANJI_RANKS.indexOf(match[2])
+      x: file,
+      y: rank
     },
-    kind: stringToKind(match[3]),
-    drop: Boolean(match[4])
+    kind,
+    drop,
+    promote
   };
 }
 
@@ -3376,28 +3451,18 @@ function formatEvaluationScore(score) {
   return `${score > 0 ? "+" : ""}${score}`;
 }
 
-function formatMoveLabel(color, to, kind, isDrop = false) {
+function formatMoveLabel(color, to, kind, isDrop = false, options = {}) {
   const prefix = color === COLOR.Black ? "▲" : "△";
-  return `${prefix}${to.x}${KANJI_RANKS[to.y]}${window.JKF.Shogi.kindToString(kind, true)}${isDrop ? "打" : ""}`;
+  const suffix = isDrop ? "\u6253" : options.promote ? "\u6210" : "";
+  return `${prefix}${to.x}${KANJI_RANKS[to.y]}${window.JKF.Shogi.kindToString(kind, true)}${suffix}`;
 }
 
 function stringToKind(text) {
-  return {
-    歩: "FU",
-    香: "KY",
-    桂: "KE",
-    銀: "GI",
-    金: "KI",
-    角: "KA",
-    飛: "HI",
-    玉: "OU",
-    と: "TO",
-    杏: "NY",
-    圭: "NK",
-    全: "NG",
-    馬: "UM",
-    龍: "RY"
-  }[text] || "";
+  const kinds = ["FU", "KY", "KE", "GI", "KI", "KA", "HI", "OU", "TO", "NY", "NK", "NG", "UM", "RY"];
+  return kinds.find((kind) =>
+    window.JKF.Shogi.kindToString(kind, true) === text ||
+    window.JKF.Shogi.kindToString(kind, false) === text
+  ) || "";
 }
 
 function formatSideLabel(playerSide) {

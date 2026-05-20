@@ -1083,7 +1083,27 @@ body[data-more-menu-open="true"] .scrim {
 }
 
 .footer-actions {
+  display: grid;
+  grid-template-columns: 46px repeat(3, minmax(0, 1fr));
   gap: 7px;
+  align-items: stretch;
+  width: 100%;
+  max-width: 100%;
+}
+
+body[data-edit-mode="true"] .footer-actions {
+  grid-template-columns: 46px repeat(2, minmax(0, 1fr));
+}
+
+body[data-edit-mode="true"][data-revealed-branch="true"] .footer-actions {
+  grid-template-columns: 46px repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 719px) {
+  .footer-actions {
+    max-width: calc(100vw - 16px);
+    justify-self: start;
+  }
 }
 
 body:not([data-edit-mode="true"]) #connect-opening-button {
@@ -1092,6 +1112,16 @@ body:not([data-edit-mode="true"]) #connect-opening-button {
 
 body[data-edit-mode="true"] #connect-opening-button {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: clamp(0.44rem, 1.45vw, 0.72rem);
+}
+
+body:not([data-edit-mode="true"]) #choice-head,
+body:not([data-edit-mode="true"]) #opponent-move-button,
+body:not([data-edit-mode="true"]) #reply-panel {
+  display: none !important;
 }
 
 body:not([data-edit-mode="true"]) #delete-branch-button,
@@ -1105,10 +1135,16 @@ body[data-edit-mode="true"] #current-position-search-button {
 }
 
 .footer-button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 44px;
   padding: 0 7px;
-  font-size: 0.82rem;
+  font-size: clamp(0.58rem, 2.35vw, 0.82rem);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .danger-button {
@@ -1119,6 +1155,26 @@ body[data-edit-mode="true"] #current-position-search-button {
 .add-footer-button {
   flex: 0 0 46px;
   min-width: 46px;
+}
+
+@media (max-width: 430px) {
+  .footer-button {
+    padding-inline: 5px;
+  }
+
+  #connect-opening-button {
+    font-size: clamp(0.42rem, 1.35vw, 0.58rem);
+  }
+}
+
+@media (max-width: 375px) {
+  .footer-button {
+    padding-inline: 4px;
+  }
+
+  #connect-opening-button {
+    font-size: clamp(0.4rem, 1.25vw, 0.52rem);
+  }
 }
 
 .hidden {
