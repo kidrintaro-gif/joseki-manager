@@ -204,14 +204,51 @@ function on(element, eventName, handler) {
 
 function updateActiveNodeNote(event) {
   const opening = getSelectedOpening();
-  const node = getActiveNode();
-  if (!opening || !node) {
+  const target = getActiveMemoTarget();
+  if (!opening || !target) {
     return;
   }
 
-  node.note = event.target.value;
+  target.note = event.target.value;
   opening.updatedAt = new Date().toISOString();
   saveOpenings();
+}
+
+function getActiveMemoTarget() {
+  const node = getActiveNode();
+  if (!node) {
+    return null;
+  }
+
+  const revealedBranch = getRevealedBranch(node);
+  if (revealedBranch) {
+    return revealedBranch;
+  }
+
+  if (!state.composer) {
+    return node.branches[state.selectedBranchIndex] || null;
+  }
+
+  if (state.composer.mode === "root-player") {
+    return node;
+  }
+
+  if (state.composer.mode === "branch") {
+    if (state.composer.branch.opponentMove || state.composer.branch.replyMove) {
+      return state.composer.branch;
+    }
+    return node.branches[state.selectedBranchIndex] || null;
+  }
+
+  return null;
+}
+
+function syncComposerNote(note = "", disabled = false) {
+  if (!elements.composerNote) {
+    return;
+  }
+  elements.composerNote.value = note;
+  elements.composerNote.disabled = disabled;
 }
 
 function preventBoardDoubleTapZoom() {
@@ -1195,6 +1232,7 @@ function renderBranchArea(branches) {
 }
 
 function renderEditorMenu() {
+  const memoTarget = getActiveMemoTarget();
   elements.choiceHead.classList.remove("hidden");
   elements.choiceNav.classList.add("hidden");
   elements.noBranchPanel.classList.add("hidden");
@@ -1205,13 +1243,14 @@ function renderEditorMenu() {
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "編集を終わる";
   elements.branchCount.textContent = "編集";
-  elements.composerNote.value = getActiveNode()?.note || "";
+  syncComposerNote(memoTarget?.note || "", !memoTarget);
   elements.composerStatus.textContent = "";
 }
 
 function renderComposer() {
   const opening = getSelectedOpening();
   const node = getActiveNode();
+  const memoTarget = getActiveMemoTarget();
   const playerSide = opening?.playerSide || "black";
   const opponentSide = getOpponentSide(playerSide);
   const branchForDeletion = getComposerDeletionBranch(node);
@@ -1222,12 +1261,12 @@ function renderComposer() {
   elements.replyPanel.classList.toggle("hidden", !branchForDeletion);
   elements.replyMoveButton.textContent = branchForDeletion ? getBranchDeleteTargetLabel(branchForDeletion) : "";
   elements.opponentMoveButton.classList.toggle("hidden", !branchForDeletion);
-  elements.opponentMoveButton.textContent = branchForDeletion?.note || "メモを入力";
+  elements.opponentMoveButton.textContent = branchForDeletion ? getBranchDeleteTargetLabel(branchForDeletion) : "";
   elements.branchDeleteButton.classList.add("hidden");
   elements.branchDeleteButton.disabled = true;
   elements.branchDeleteButton.textContent = "";
   elements.composerPanel.classList.remove("hidden");
-  elements.composerNote.value = node?.note || "";
+  syncComposerNote(memoTarget?.note || "", !memoTarget);
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "入力をやめる";
 
@@ -1266,7 +1305,7 @@ function renderBranchBrowser(branches) {
 
   elements.choiceHead.classList.add("hidden");
   elements.choiceNav.classList.add("hidden");
-  elements.composerPanel.classList.add("hidden");
+  elements.composerPanel.classList.toggle("hidden", !selectedBranch);
   elements.editAddBranchButton.classList.add("hidden");
   elements.cancelComposeButton.textContent = "入力をやめる";
   elements.noBranchPanel.classList.toggle("hidden", hasBranches);
@@ -1290,7 +1329,9 @@ function renderBranchBrowser(branches) {
   }
 
   elements.branchCount.textContent = "";
-  elements.opponentMoveButton.textContent = selectedBranch ? selectedBranch.note || "メモを入力" : "";
+  syncComposerNote(selectedBranch?.note || "", !selectedBranch);
+  elements.composerStatus.textContent = "";
+  elements.opponentMoveButton.textContent = selectedBranch ? getBranchDeleteTargetLabel(selectedBranch) : "";
   elements.branchDeleteButton.textContent = selectedBranch ? getBranchDeleteButtonLabel(selectedBranch) : "";
   if (branch && isConnectionBranch(branch)) {
     const connectionIndex = node.branches.findIndex((item) => item.id === branch.id);
@@ -1388,7 +1429,8 @@ function startBranchComposer() {
       boardSfen: node.sfen,
       branch: {
         opponentMove: "",
-        replyMove: ""
+        replyMove: "",
+        note: ""
       },
       selected: null,
       legalMoves: []
@@ -1403,7 +1445,8 @@ function startBranchComposer() {
     boardSfen: node.sfen,
     branch: {
       opponentMove: "",
-      replyMove: ""
+      replyMove: "",
+      note: ""
     },
     selected: null,
     legalMoves: []
@@ -1670,6 +1713,7 @@ function applyComposerMove(game, move) {
       composer.boardSfen = game.toSFENString(1);
       composer.branch.opponentMove = "";
       composer.branch.replyMove = "";
+      composer.branch.note = "";
       composer.selected = null;
       composer.legalMoves = [];
       render();
@@ -1782,7 +1826,7 @@ function saveComposedBranch(nextSfen) {
     id: crypto.randomUUID(),
     opponentMove: composer.branch.opponentMove,
     replyMove: composer.branch.replyMove,
-    note: "",
+    note: composer.branch.note || "",
     nextOpeningId,
     nextNodeId
   });
@@ -1854,28 +1898,7 @@ function revealBranch() {
 }
 
 function editSelectedBranchNote() {
-  const node = getActiveNode();
-  if (!node || !node.branches.length || state.composer) {
-    return;
-  }
-
-  const branch = node.branches[state.selectedBranchIndex];
-  if (!branch) {
-    return;
-  }
-
-  const note = window.prompt("この手順のメモ", branch.note || "");
-  if (note === null) {
-    return;
-  }
-
-  branch.note = note.trim();
-  const opening = getSelectedOpening();
-  if (opening) {
-    opening.updatedAt = new Date().toISOString();
-  }
-  saveOpenings();
-  render();
+  elements.composerNote?.focus();
 }
 
 function searchPositionFromInput() {
@@ -2415,6 +2438,7 @@ function resetComposerToCurrentOpponent() {
   composer.boardSfen = getActiveNode()?.sfen || composer.boardSfen;
   composer.branch.opponentMove = "";
   composer.branch.replyMove = "";
+  composer.branch.note = "";
   composer.selected = null;
   composer.legalMoves = [];
   state.revealedBranchId = null;
