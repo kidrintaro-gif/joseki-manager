@@ -54,7 +54,12 @@
     .footer-button {
       min-height: 44px;
       padding: 0 7px;
-      font-size: 0.82rem;
+      font-size: clamp(0.58rem, 2.35vw, 0.82rem);
+      white-space: nowrap;
+    }
+
+    body[data-edit-mode="true"] #connect-opening-button {
+      font-size: clamp(0.62rem, 2.2vw, 0.78rem);
     }
   </style>
 </head>
@@ -255,7 +260,7 @@
           <button id="back-button" class="footer-button" type="button">戻る</button>
           <button id="reset-button" class="footer-button" type="button">最初に戻る</button>
           <button id="current-position-search-button" class="footer-button" type="button">局面検索</button>
-          <button id="connect-opening-button" class="footer-button" type="button">他の定跡に接続</button>
+          <button id="connect-opening-button" class="footer-button" type="button">他の定跡に</button>
           <button id="delete-branch-button" class="footer-button danger-button" type="button">この手を削除</button>
         </footer>
       </section>
