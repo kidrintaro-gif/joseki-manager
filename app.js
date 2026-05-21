@@ -2945,7 +2945,7 @@ function exportOpeningItems(openings, message, filename) {
     return;
   }
 
-  const blob = new Blob([JSON.stringify(openings, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(openings, null, 2)], { type: "application/x-joseki+json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -2958,7 +2958,7 @@ function exportOpeningFolder(openings) {
   const folderName = "定跡管理-選択分";
   const usedNames = new Map();
   const files = openings.map((opening) => {
-    const baseName = sanitizeFilename(opening.name || "定跡").replace(/\.joseki$/i, "");
+    const baseName = sanitizeFilename(opening.name || "定跡").replace(/\.joseki(?:\.json)?$/i, "");
     const count = usedNames.get(baseName) || 0;
     usedNames.set(baseName, count + 1);
     const fileName = count ? `${baseName}-${count + 1}.joseki` : `${baseName}.joseki`;
@@ -3077,7 +3077,7 @@ function sanitizeFilename(filename) {
 
 async function importOpenings(event) {
   const files = [...(event.target.files || [])].filter((file) =>
-    file.name.toLowerCase().endsWith(".joseki") ||
+    isJosekiFileName(file.name) ||
     file.name.toLowerCase().endsWith(".zip") ||
     file.name.toLowerCase().endsWith(".json")
   );
@@ -3142,7 +3142,7 @@ async function extractJosekiTextsFromZip(file) {
     if (dataEnd > bytes.length) {
       throw new Error("ZIPの中身を読み取れませんでした");
     }
-    if (fileName.toLowerCase().endsWith(".joseki")) {
+    if (isJosekiFileName(fileName)) {
       if (method !== 0) {
         throw new Error("圧縮されたZIPにはまだ対応していません");
       }
@@ -3156,6 +3156,11 @@ async function extractJosekiTextsFromZip(file) {
     throw new Error("ZIPの中に.josekiがありません");
   }
   return texts;
+}
+
+function isJosekiFileName(fileName) {
+  const lower = String(fileName || "").toLowerCase();
+  return lower.endsWith(".joseki") || lower.endsWith(".joseki.json");
 }
 
 function selectOpening(openingId, closeMenu = true) {
